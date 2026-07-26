@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Settings, Send, Plus, Eye, EyeOff, Edit2, Check, Trash2, 
-  Download, Upload, Moon, Sun, Heart, Paperclip, MessageSquare 
+  Settings, Send, Eye, EyeOff, Edit2, Check, Trash2, 
+  Download, Upload, Moon, Sun, Heart, Paperclip 
 } from 'lucide-react';
 
 type Provider = 'openai' | 'anthropic' | 'gemini' | 'grok';
@@ -18,7 +18,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  isHidden?: boolean; // 非表示（隠しプロンプト）フラグ
+  isHidden?: boolean;
   files?: { name: string; content: string }[];
 }
 
@@ -70,7 +70,15 @@ export default function Home() {
     if (savedKeys) setApiKeys(JSON.parse(savedKeys));
     
     const savedModels = localStorage.getItem('llm_custom_models');
-    if (savedModels) setModels(JSON.parse(savedModels));
+    const currentModels = savedModels ? JSON.parse(savedModels) : DEFAULT_MODELS;
+    if (savedModels) setModels(currentModels);
+
+    // モデル固定機能：保存されたモデルを選択
+    const savedModelId = localStorage.getItem('llm_selected_model');
+    if (savedModelId) {
+      const found = currentModels.find((m: ModelOption) => m.id === savedModelId);
+      if (found) setSelectedModel(found);
+    }
 
     const savedTheme = localStorage.getItem('llm_theme');
     if (savedTheme) setTheme(savedTheme as any);
@@ -134,7 +142,6 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // APIキーの確認
       const apiKey = apiKeys[selectedModel.provider];
       if (!apiKey) {
         alert(`${selectedModel.provider.toUpperCase()} のAPIキーを設定画面で入力してください`);
@@ -142,7 +149,6 @@ export default function Home() {
         return;
       }
 
-      // 非表示メッセージも含めてAPIに送信
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,7 +178,7 @@ export default function Home() {
     }
   };
 
-  // ダミー/隠しプロンプトの追加 (APIを叩かずに履歴に追加)
+  // ダミー/隠しプロンプトの追加
   const handleAddDummy = (role: 'user' | 'assistant', isHidden: boolean) => {
     const text = prompt(`${role === 'user' ? 'ユーザー' : 'AI'}のメッセージを入力 (${isHidden ? '非表示モード' : '通常'}):`);
     if (!text) return;
@@ -192,7 +198,7 @@ export default function Home() {
     setEditingId(null);
   };
 
-  // 表示切替 (非表示フラグのトグル)
+  // 表示切替
   const toggleHide = (id: string) => {
     setMessages(messages.map(m => m.id === id ? { ...m, isHidden: !m.isHidden } : m));
   };
@@ -202,7 +208,7 @@ export default function Home() {
     setMessages(messages.filter(m => m.id !== id));
   };
 
-  // ファイル読み込み (テキスト/PDF/画像)
+  // ファイル読み込み
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -214,9 +220,9 @@ export default function Home() {
         setAttachedFiles(prev => [...prev, { name: file.name, content }]);
       };
       if (file.type.startsWith('image/')) {
-        reader.readAsDataURL(file); // 画像はBase64
+        reader.readAsDataURL(file);
       } else {
-        reader.readAsText(file); // テキスト/コード
+        reader.readAsText(file);
       }
     });
   };
@@ -247,66 +253,86 @@ export default function Home() {
     reader.readAsText(file);
   };
 
-  // テーマ切り替え用クラス
-  const themeClass = theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'pink' ? 'theme-pink' : 'bg-gray-50 text-gray-900';
-  const cardClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'pink' ? 'bg-white border-pink-200' : 'bg-white border-gray-200';
+  // テーマ・スタイルクラス（ダークモード対応強化）
+  const themeClass = theme === 'dark' ? 'bg-gray-900 text-gray-100' : theme === 'pink' ? 'theme-pink' : 'bg-gray-50 text-gray-800';
+  const cardClass = theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : theme === 'pink' ? 'bg-white border-pink-200 text-gray-800' : 'bg-white border-gray-200 text-gray-800';
+  const inputBgClass = theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-300';
   const fontClass = fontSize === 'sm' ? 'text-sm' : fontSize === 'lg' ? 'text-lg' : 'text-base';
+
+  // ノート風：ユーザーとAIで明確に色分けされた背景スタイル
+  const getUserMsgStyle = () => {
+    if (theme === 'dark') return 'bg-blue-950/50 border-blue-800 text-blue-100';
+    if (theme === 'pink') return 'bg-pink-100/80 border-pink-300 text-pink-950';
+    return 'bg-blue-50 border-blue-200 text-blue-950';
+  };
+
+  const getAiMsgStyle = () => {
+    if (theme === 'dark') return 'bg-gray-800 border-gray-700 text-gray-100';
+    if (theme === 'pink') return 'bg-white border-pink-200 text-gray-900';
+    return 'bg-white border-gray-200 text-gray-900';
+  };
 
   return (
     <div className={`min-h-screen flex flex-col ${themeClass} ${fontClass}`}>
-      {/* ヘッダー */}
+      {/* ノート風ヘッダー */}
       <header className={`p-4 border-b flex justify-between items-center ${cardClass}`}>
         <div className="flex items-center gap-2">
-          <Heart className="w-6 h-6 text-pink-500 fill-pink-500" />
-          <h1 className="font-bold text-lg">Multi-LLM PWA</h1>
+          <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
+          <h1 className="font-bold text-base tracking-wide">Notebook Chat</h1>
         </div>
 
-        {/* モデル選択 & 設定ボタン */}
+        {/* モデル選択（選択時に固定保存） & 設定ボタン */}
         <div className="flex items-center gap-2">
           <select 
             value={selectedModel.id}
-            onChange={(e) => setSelectedModel(models.find(m => m.id === e.target.value) || models[0])}
-            className={`p-2 rounded border text-sm ${cardClass}`}
+            onChange={(e) => {
+              const m = models.find(mod => mod.id === e.target.value) || models[0];
+              setSelectedModel(m);
+              localStorage.setItem('llm_selected_model', m.id); // モデル固定
+            }}
+            className={`p-2 rounded border text-xs font-medium outline-none ${inputBgClass}`}
           >
             {models.map(m => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
 
-          <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-black/5">
+          <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
             <Settings className="w-5 h-5" />
           </button>
         </div>
       </header>
 
-      {/* メインチャットエリア */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4 max-w-3xl mx-auto w-full">
-        {/* システムプロンプト表示エリア */}
+      {/* ノート風メインコンテンツ */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-3xl mx-auto w-full">
+        {/* システムプロンプト欄 */}
         <div className={`p-3 rounded-lg border text-xs ${cardClass}`}>
-          <span className="font-bold">System Prompt:</span>
+          <span className="font-bold opacity-75">システム指示 (System Prompt):</span>
           <input 
             type="text" 
             value={systemPrompt} 
             onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="AIへの裏指示（例: 語尾をニャにして）" 
-            className="w-full mt-1 bg-transparent border-b outline-none"
+            placeholder="AIの前提条件やキャラクター設定を入力..." 
+            className="w-full mt-1 bg-transparent border-b border-gray-300 dark:border-gray-600 outline-none"
           />
         </div>
 
-        {/* 会話ログ */}
+        {/* ノート形式のメッセージストリーム */}
         {messages.map((m) => (
           <div 
             key={m.id} 
-            className={`p-4 rounded-xl border relative ${cardClass} ${m.isHidden ? 'opacity-40 border-dashed' : ''}`}
+            className={`p-4 rounded-lg border-l-4 border-y border-r transition-all ${
+              m.role === 'user' ? getUserMsgStyle() : getAiMsgStyle()
+            } ${m.isHidden ? 'opacity-40 border-dashed' : ''}`}
           >
-            <div className="flex justify-between items-center mb-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${m.role === 'user' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                {m.role === 'user' ? 'User' : 'AI'}
-                {m.isHidden && ' (非表示・隠し指示)'}
+            <div className="flex justify-between items-center mb-2 pb-1 border-b border-black/5 dark:border-white/10">
+              <span className="text-xs font-bold flex items-center gap-1">
+                {m.role === 'user' ? '👤 User' : `🤖 ${selectedModel.name}`}
+                {m.isHidden && ' (※隠しプロンプト / 非表示)'}
               </span>
 
-              {/* メッセージ操作ボタン */}
-              <div className="flex gap-1 text-gray-500">
+              {/* 操作ボタン */}
+              <div className="flex gap-2 opacity-70 hover:opacity-100">
                 <button onClick={() => toggleHide(m.id)} title="表示/非表示切替">
                   {m.isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -321,82 +347,82 @@ export default function Home() {
 
             {/* 本文表示 or 編集 */}
             {editingId === m.id ? (
-              <div className="space-y-2">
+              <div className="space-y-2 mt-2">
                 <textarea 
                   value={editContent} 
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full p-2 border rounded text-black" 
-                  rows={3} 
+                  className={`w-full p-2 border rounded font-mono text-sm ${inputBgClass}`} 
+                  rows={4} 
                 />
-                <button onClick={() => handleSaveEdit(m.id)} className="bg-green-500 text-white px-3 py-1 rounded text-xs flex items-center gap-1">
+                <button onClick={() => handleSaveEdit(m.id)} className="bg-green-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1">
                   <Check className="w-3 h-3" /> 保存
                 </button>
               </div>
             ) : (
-              <div className="whitespace-pre-wrap">{m.content}</div>
+              <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
             )}
           </div>
         ))}
-        {loading && <div className="text-center text-sm text-gray-400">AIが思考中...</div>}
+        {loading && <div className="text-center text-xs opacity-60 animate-pulse">AIが回答をノートに記入中...</div>}
         <div ref={chatEndRef} />
       </main>
 
-      {/* サブツールバー（ダミー追加 / ファイル / インポート・エクスポート） */}
+      {/* サブツールバー */}
       <div className={`p-2 border-t max-w-3xl mx-auto w-full flex flex-wrap gap-2 text-xs ${cardClass}`}>
-        <button onClick={() => handleAddDummy('user', false)} className="p-1 px-2 border rounded hover:bg-black/5">+ 通常ユーザー発言</button>
-        <button onClick={() => handleAddDummy('user', true)} className="p-1 px-2 border rounded bg-yellow-50 text-yellow-800">+ 隠し指示 (UI非表示)</button>
-        <button onClick={() => handleAddDummy('assistant', false)} className="p-1 px-2 border rounded hover:bg-black/5">+ 捏造AI回答</button>
+        <button onClick={() => handleAddDummy('user', false)} className="p-1 px-2 border rounded hover:bg-black/5 dark:hover:bg-white/10">+ 発言追加</button>
+        <button onClick={() => handleAddDummy('user', true)} className="p-1 px-2 border rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700">+ 隠し指示追加</button>
+        <button onClick={() => handleAddDummy('assistant', false)} className="p-1 px-2 border rounded hover:bg-black/5 dark:hover:bg-white/10">+ AI回答捏造</button>
         
         <div className="ml-auto flex gap-2">
-          <button onClick={handleExport} className="p-1 px-2 border rounded flex items-center gap-1"><Download className="w-3 h-3" /> 出力</button>
-          <label className="p-1 px-2 border rounded cursor-pointer flex items-center gap-1">
+          <button onClick={handleExport} className="p-1 px-2 border rounded flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/10"><Download className="w-3 h-3" /> 出力</button>
+          <label className="p-1 px-2 border rounded cursor-pointer flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/10">
             <Upload className="w-3 h-3" /> 復元
             <input type="file" accept=".json" onChange={handleImport} className="hidden" />
           </label>
         </div>
       </div>
 
-      {/* 入力エリア */}
-      <footer className={`p-4 border-t max-w-3xl mx-auto w-full ${cardClass}`}>
+      {/* 固定＆拡大入力エリア */}
+      <footer className={`sticky bottom-0 p-4 border-t max-w-3xl mx-auto w-full shadow-lg ${cardClass}`}>
         {attachedFiles.length > 0 && (
           <div className="flex gap-2 mb-2">
             {attachedFiles.map((f, i) => (
-              <span key={i} className="text-xs bg-gray-200 p-1 rounded">📎 {f.name}</span>
+              <span key={i} className="text-xs bg-black/10 dark:bg-white/10 p-1 rounded">📎 {f.name}</span>
             ))}
           </div>
         )}
-        <div className="flex gap-2">
-          <label className="p-2 border rounded cursor-pointer hover:bg-black/5">
-            <Paperclip className="w-5 h-5 text-gray-500" />
+        <div className="flex gap-2 items-end">
+          <label className="p-3 border rounded cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 flex-shrink-0">
+            <Paperclip className="w-5 h-5 opacity-60" />
             <input type="file" multiple onChange={handleFileUpload} className="hidden" />
           </label>
           <textarea 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="メッセージを入力..."
-            className="flex-1 p-2 border rounded resize-none outline-none text-black"
-            rows={1}
+            placeholder="メッセージを入力... (Shift+Enterで改行)"
+            className={`flex-1 p-3 border rounded-lg resize-y min-h-[80px] max-h-[250px] outline-none ${inputBgClass}`}
+            rows={3}
             onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           />
-          <button onClick={handleSend} disabled={loading} className="p-3 bg-pink-500 text-white rounded-lg hover:bg-pink-600 disabled:opacity-50">
+          <button onClick={handleSend} disabled={loading} className="p-3.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg disabled:opacity-50 flex-shrink-0">
             <Send className="w-5 h-5" />
           </button>
         </div>
       </footer>
 
-      {/* 設定モーダル */}
+      {/* 設定モーダル（ダークモード完全修復） */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white text-black p-6 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto space-y-4">
-            <h2 className="text-lg font-bold border-b pb-2">アプリ設定</h2>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className={`p-6 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto space-y-4 border shadow-2xl ${cardClass}`}>
+            <h2 className="text-base font-bold border-b pb-2 border-gray-200 dark:border-gray-700">アプリ設定</h2>
 
             {/* テーマ切り替え */}
             <div>
               <label className="text-xs font-bold block mb-1">テーマ設定</label>
               <div className="flex gap-2">
-                <button onClick={() => setTheme('light')} className="p-2 border rounded flex-1 flex items-center justify-center gap-1"><Sun className="w-4 h-4" /> ライト</button>
-                <button onClick={() => setTheme('dark')} className="p-2 border rounded flex-1 flex items-center justify-center gap-1"><Moon className="w-4 h-4" /> ダーク</button>
-                <button onClick={() => setTheme('pink')} className="p-2 border rounded flex-1 flex items-center justify-center gap-1 text-pink-500"><Heart className="w-4 h-4" /> ピンク</button>
+                <button onClick={() => setTheme('light')} className={`p-2 border rounded flex-1 flex items-center justify-center gap-1 ${theme === 'light' ? 'border-pink-500 font-bold' : ''}`}><Sun className="w-4 h-4" /> ライト</button>
+                <button onClick={() => setTheme('dark')} className={`p-2 border rounded flex-1 flex items-center justify-center gap-1 ${theme === 'dark' ? 'border-pink-500 font-bold' : ''}`}><Moon className="w-4 h-4" /> ダーク</button>
+                <button onClick={() => setTheme('pink')} className={`p-2 border rounded flex-1 flex items-center justify-center gap-1 text-pink-500 ${theme === 'pink' ? 'border-pink-500 font-bold' : ''}`}><Heart className="w-4 h-4" /> ピンク</button>
               </div>
             </div>
 
@@ -411,38 +437,38 @@ export default function Home() {
             </div>
 
             {/* APIキー設定 */}
-            <div className="space-y-2 border-t pt-2">
-              <label className="text-xs font-bold block">APIキー（各自のものを入力）</label>
+            <div className="space-y-2 border-t pt-2 border-gray-200 dark:border-gray-700">
+              <label className="text-xs font-bold block">APIキー設定</label>
               {(['openai', 'anthropic', 'gemini', 'grok'] as Provider[]).map((p) => (
                 <div key={p}>
-                  <span className="text-xs uppercase font-mono">{p}</span>
+                  <span className="text-xs uppercase font-mono opacity-80">{p}</span>
                   <input 
                     type="password" 
                     value={apiKeys[p]} 
                     onChange={(e) => setApiKeys({ ...apiKeys, [p]: e.target.value })}
                     placeholder={`${p} API Key`}
-                    className="w-full p-2 border rounded text-xs"
+                    className={`w-full p-2 border rounded text-xs mt-1 ${inputBgClass}`}
                   />
                 </div>
               ))}
             </div>
 
             {/* モデル追加 */}
-            <div className="border-t pt-2 space-y-2">
+            <div className="border-t pt-2 space-y-2 border-gray-200 dark:border-gray-700">
               <label className="text-xs font-bold block">新しいモデルを追加</label>
-              <input type="text" placeholder="モデルID (例: gpt-4.5-preview)" value={newModelId} onChange={(e) => setNewModelId(e.target.value)} className="w-full p-1 border rounded text-xs" />
-              <input type="text" placeholder="表示名 (例: ChatGPT 4.5)" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} className="w-full p-1 border rounded text-xs" />
-              <select value={newModelProvider} onChange={(e) => setNewModelProvider(e.target.value as any)} className="w-full p-1 border rounded text-xs">
+              <input type="text" placeholder="モデルID (例: gpt-4.5-preview)" value={newModelId} onChange={(e) => setNewModelId(e.target.value)} className={`w-full p-2 border rounded text-xs ${inputBgClass}`} />
+              <input type="text" placeholder="表示名 (例: ChatGPT 4.5)" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} className={`w-full p-2 border rounded text-xs ${inputBgClass}`} />
+              <select value={newModelProvider} onChange={(e) => setNewModelProvider(e.target.value as any)} className={`w-full p-2 border rounded text-xs ${inputBgClass}`}>
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="gemini">Gemini</option>
                 <option value="grok">Grok</option>
               </select>
-              <button onClick={handleAddModel} className="w-full p-2 bg-gray-100 border rounded text-xs font-bold">+ モデルを追加</button>
+              <button onClick={handleAddModel} className="w-full p-2 border rounded text-xs font-bold hover:bg-black/5 dark:hover:bg-white/10">+ モデルを追加</button>
             </div>
 
-            <div className="flex gap-2 border-t pt-4">
-              <button onClick={handleSaveKeys} className="flex-1 p-2 bg-pink-500 text-white rounded font-bold">保存</button>
+            <div className="flex gap-2 border-t pt-4 border-gray-200 dark:border-gray-700">
+              <button onClick={handleSaveKeys} className="flex-1 p-2 bg-pink-500 hover:bg-pink-600 text-white rounded font-bold">保存</button>
               <button onClick={() => setShowSettings(false)} className="p-2 border rounded">閉じる</button>
             </div>
           </div>
