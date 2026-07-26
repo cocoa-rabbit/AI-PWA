@@ -1,0 +1,15 @@
+{
+  "name": "Multi AI Chat PWA",
+  "short_name": "AIChat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff69b4",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1698/1698535.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
